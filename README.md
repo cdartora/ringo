@@ -58,9 +58,16 @@ ringo/
   env.example               # variáveis documentadas → copiar para .env
   tsconfig.base.json
   apps/
-    webhook/                # servidor HTTP (Node + TypeScript)
+    webhook/
+      src/
+        app.ts             # Express: rotas e ordem dos middlewares
+        server.ts          # listen
+        middleware/
+        controllers/
+        services/
+        repositories/
   packages/
-    shared/                 # tipos compartilhados (@ringo/shared)
+    shared/                 # @ringo/shared — tipos + ingestRequestSchema (Zod)
   docs/
     context/
       ringo-system.md
@@ -85,8 +92,9 @@ cp env.example .env
 npm run dev:webhook
 ```
 
+- Stack: **Express** (`apps/webhook`), validação do corpo com **Zod** no pacote `@ringo/shared` (`ingestRequestSchema`).
 - Saúde: [http://localhost:3000/health](http://localhost:3000/health) (porta padrão `3000`; sobrescreva com `PORT` no `.env`).
-- Ingestão: `POST http://localhost:3000/ingest` com `Authorization: Bearer …` e corpo JSON conforme `IngestRequest` em `@ringo/shared`. A implementação atual valida o pedido e responde **501** (`not_implemented`) até Gemini e Google Sheets serem ligados.
+- Ingestão: `POST http://localhost:3000/ingest` com `Authorization: Bearer …` e corpo JSON que passe em `ingestRequestSchema`. Resposta **501** (`not_implemented`) até Gemini e Google Sheets serem ligados.
 
 Verificação de tipos do app webhook:
 

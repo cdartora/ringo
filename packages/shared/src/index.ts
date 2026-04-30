@@ -3,9 +3,9 @@ export type {
   TipoLancamento,
   Moeda,
 } from "./launch.js";
-export type {
-  IngestRequest,
-  IngestResponse,
-  IngestError,
-  ModoIngestao,
-} from "./webhook.js";
+export {
+  ingestRequestSchema,
+  type IngestRequest,
+  type ModoIngestao,
+} from "./ingest.schema.js";
+export type { IngestResponse, IngestError } from "./webhook.js";

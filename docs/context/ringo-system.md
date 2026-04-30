@@ -37,7 +37,7 @@ Permitir que uma pessoa registre **lançamentos de finanças pessoais** falando 
 | `GET` | `/health` | Nenhuma |
 | `POST` | `/ingest` | Cabeçalho `Authorization: Bearer <WEBHOOK_SHARED_SECRET>` |
 
-Corpo JSON de `/ingest` alinhado aos tipos `IngestRequest` em `@ringo/shared`:
+Corpo JSON de `/ingest` definido e validado em runtime por **`ingestRequestSchema` (Zod)** em `@ringo/shared`, com tipos inferidos como `IngestRequest`:
 
 - `telegram_user_id` (number), `client_message_id` (number), `modo` (`"text"` \| `"audio"`), `recebido_em` (ISO 8601).
 - Se `modo === "text"`: `texto` (string) obrigatório.
