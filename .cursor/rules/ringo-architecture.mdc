@@ -1,0 +1,17 @@
+---
+description: Arquitetura Ringo — Telegram, webhook, Gemini Flash, Sheets, free tier
+globs: "**/*"
+alwaysApply: true
+---
+
+# Ringo — arquitetura e restrições
+
+- **Monorepo**: bot Telegram + webhook no mesmo repositório, pacotes compartilhados para contratos (schema JSON, tipos, erros).
+- **Separação de responsabilidades**: o bot só faz I/O Telegram + chamada HTTP autenticada; **LLM e Sheets ficam no webhook** (ou serviço equivalente).
+- **LLM**: priorizar **Gemini Flash**; suportar **áudio** como entrada multimodal; saída deve ser **JSON** validável conforme `docs/context/ringo-system.md`.
+- **Free tier**: assumir **cold start** (~15 min idle), timeouts apertados da plataforma e cotas baixas — evitar chatter desnecessário, implementar retries idempotentes onde fizer sentido.
+- **Planilha**: operações **append**; mapeamento colunas ↔ schema centralizado em um único módulo; service account Google com princípio do mínimo privilégio.
+- **Segurança mínima**: secret/HMAC entre bot e webhook; allowlist de `telegram_user_id` para projeto pessoal.
+- **UX**: respostas ao usuário com **confirmação** de lançamento e **resumo parseado** quando possível; erros em linguagem humana, sem vazar internals.
+
+Ao alterar fluxos ou schema, atualizar **README** e **`docs/context/ringo-system.md`** na mesma PR quando aplicável.

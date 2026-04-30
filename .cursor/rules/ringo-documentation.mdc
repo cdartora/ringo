@@ -1,0 +1,13 @@
+---
+description: Documentação Ringo — manter README e contexto RAG alinhados
+globs: "**/*.md"
+alwaysApply: false
+---
+
+# Ringo — fortalecimento da documentação
+
+- **`docs/context/ringo-system.md`** é a **fonte canônica** de produto, schema de lançamento, fluxos e limites de free tier. Mudanças de comportamento entram aqui **antes** ou **junto** do código.
+- **`README.md`**: visão de alto nível, diagrama, tabela de stack sugerida e links (Trello, docs). Sem duplicar parágrafos longos do contexto; preferir link para `docs/context/ringo-system.md`.
+- **Contratos**: ao mudar JSON de lançamento, colunas da planilha ou variáveis de ambiente, documentar explicitamente (ex.: seção “Configuração” ou schema no doc de contexto).
+- **Decisões**: decisões de arquitetura duradouras podem ser registradas em 1–3 frases no `ringo-system.md` (seção evolutiva), não em comentários espalhados só no código.
+- **Idioma**: documentação do produto em **português**; nomes de código e APIs podem permanecer em inglês se for convenção do repositório.

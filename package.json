@@ -1,0 +1,14 @@
+{
+  "name": "ringo",
+  "private": true,
+  "workspaces": [
+    "packages/*",
+    "apps/*"
+  ],
+  "scripts": {
+    "dev:webhook": "npm run dev -w @ringo/webhook"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

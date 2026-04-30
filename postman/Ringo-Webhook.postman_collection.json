@@ -1,0 +1,72 @@
+{
+  "info": {
+    "name": "Ringo Webhook",
+    "description": "Chamadas HTTP locais para o apps/webhook do Ringo. Defina as variáveis da collection após importar.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:3000"
+    },
+    {
+      "key": "webhookSecret",
+      "value": ""
+    }
+  ],
+  "item": [
+    {
+      "name": "Health",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": "{{baseUrl}}/health",
+        "description": "Sem autenticação. Esperado: 200 com status ok."
+      }
+    },
+    {
+      "name": "Ingest (texto)",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "Authorization",
+            "value": "Bearer {{webhookSecret}}"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"telegram_user_id\": 123456789,\n  \"client_message_id\": 42,\n  \"modo\": \"text\",\n  \"texto\": \"Gastei 45 reais no mercado ontem\",\n  \"recebido_em\": \"2026-04-30T12:00:00.000Z\"\n}"
+        },
+        "url": "{{baseUrl}}/ingest",
+        "description": "Requer WEBHOOK_SHARED_SECRET igual ao Bearer. Stub atual responde 501 not_implemented após validar o body."
+      }
+    },
+    {
+      "name": "Ingest (audio)",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "Authorization",
+            "value": "Bearer {{webhookSecret}}"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"telegram_user_id\": 123456789,\n  \"client_message_id\": 43,\n  \"modo\": \"audio\",\n  \"audio_url\": \"https://example.com/audio.ogg\",\n  \"mime_type\": \"audio/ogg\",\n  \"recebido_em\": \"2026-04-30T12:00:00.000Z\"\n}"
+        },
+        "url": "{{baseUrl}}/ingest",
+        "description": "Exemplo de payload para modo audio (URL baixável pelo webhook)."
+      }
+    }
+  ]
+}
