@@ -28,6 +28,19 @@ export function misconfiguredResponse(): IngestResponse {
   };
 }
 
+export function geminiMisconfiguredResponse(): IngestResponse {
+  const mensagem =
+    "Servidor não configurado: defina GEMINI_API_KEY no ambiente.";
+  return {
+    ok: false,
+    mensagem_usuario: mensagem,
+    erro: {
+      codigo: "misconfigured_gemini",
+      mensagem: "GEMINI_API_KEY ausente.",
+    },
+  };
+}
+
 export function notImplementedResponse(): IngestResponse {
   return {
     ok: false,

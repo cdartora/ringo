@@ -25,7 +25,7 @@ Permitir que uma pessoa registre **lançamentos de finanças pessoais** falando 
 
 ### 2. Webhook (HTTP)
 
-- **Função**: orquestração — recebe evento do bot, chama **Gemini**, valida JSON, grava na **Sheet**.
+- **Função**: orquestração — recebe evento do bot, chama **Gemini**, valida JSON com **`lancamentoFinanceiroSchema`**, e **no futuro** grava na **Sheet** (append ainda não implementado).
 - **Hibernação**: em free tier, instâncias frequentemente **dormem** após ~**15 min** sem tráfego. O primeiro request após idle pode ser lento.
 - Deve ser **idempotente** quando possível (ex.: `client_message_id` para não duplicar linha).
 - Timeouts: alinhar limite da plataforma com tempo de Gemini + Sheets (retry com backoff onde aplicável).
@@ -41,17 +41,37 @@ Corpo JSON de `/ingest` definido e validado em runtime por **`ingestRequestSchem
 
 - `telegram_user_id` (number), `client_message_id` (number), `modo` (`"text"` \| `"audio"`), `recebido_em` (ISO 8601).
 - Se `modo === "text"`: `texto` (string) obrigatório.
-- Se `modo === "audio"`: `audio_url` (string) obrigatório — URL que o webhook pode baixar (ex.: link do Telegram `getFile`).
+- Se `modo === "audio"`: `audio_url` (string) obrigatório — URL **HTTPS** cujo hostname seja **`api.telegram.org`** (link `getFile` do Telegram). Outros hosts são rejeitados (mitigação SSRF).
 - Opcional: `mime_type` (string).
 
-Resposta JSON: tipo `IngestResponse` (`ok`, `mensagem_usuario`, `lancamento?`, `erro?`). O stub atual valida o pedido e responde **501** com `not_implemented` até Gemini/Sheets estarem ligados.
+Resposta JSON: tipo `IngestResponse` (`ok`, `mensagem_usuario`, `lancamento?`, `erro?`). Com `GEMINI_API_KEY` definido, o webhook chama **Gemini Flash**, interpreta texto ou áudio e valida o resultado com **`lancamentoFinanceiroSchema`** (`@ringo/shared`). **Append na Google Sheet** ainda não está ligado; em sucesso o campo `lancamento` é devolvido e `mensagem_usuario` confirma o reconhecimento (referência de que a planilha está pendente).
 
-Variáveis de ambiente: ver `env.example` na raiz do repositório.
+##### Normalização de `data`
+
+- Se o modelo devolver `data: null`, o webhook define `data` com a **data de calendário local do processo** (timezone do Node) derivada de `recebido_em`. Se `recebido_em` for inválido, usa-se a data local no momento do pedido.
+
+##### Códigos em `erro.codigo` (orientação para o bot)
+
+| codigo | Resumo |
+|--------|--------|
+| `misconfigured_gemini` | `GEMINI_API_KEY` ausente |
+| `invalid_audio_url` | URL de áudio inválida ou host não permitido |
+| `audio_download_failed` | Falha ao obter o ficheiro de áudio |
+| `gemini_auth` | Chave API inválida ou recusada (401/403 ou 400 com mensagem de API key) |
+| `gemini_model_not_found` | Modelo não encontrado para a conta/região (404); ajustar `GEMINI_MODEL` |
+| `gemini_rate_limit` | Limite de pedidos / cota (429) |
+| `gemini_unavailable` | Outros erros ao contactar a API Gemini |
+| `gemini_blocked` | Bloqueio por filtros da API |
+| `gemini_empty_response` | Resposta sem texto utilizável |
+| `extraction_invalid` | JSON inválido ou fora do schema de lançamento |
+
+Variáveis de ambiente: ver `env.example` (`GEMINI_API_KEY`, opcional `GEMINI_MODEL`).
 
 
 ### 3. Google Gemini (Flash)
 
 - **Entrada**: áudio (quando o usuário mandou voz) ou texto.
+- **Modelo**: variável **`GEMINI_MODEL`** (omissão **`gemini-2.5-flash`**).
 - **Saída**: **JSON estruturado** compatível com o **schema de lançamento** (ver abaixo). Flash é preferido por custo/latência em uso leve.
 - Prompt deve instruir: apenas JSON válido, campos nulos quando incerto, moeda e locale do usuário.
 
@@ -83,7 +103,7 @@ Campos opcionais até o prompt da LLM fixar: `moeda`, `observacoes`, `confianca`
 
 **Regras:**
 
-- `data` nulo → usar data local do servidor ou do evento Telegram (definir na implementação e documentar).
+- `data` nulo na **saída do modelo** → preenchido pelo webhook com base em `recebido_em` (ver «Normalização de `data`» acima).
 - Valores monetários sempre com ponto decimal ou formato fixo após normalização.
 - Nunca gravar PII desnecessária na planilha além do necessário para o lançamento.
 
@@ -93,8 +113,8 @@ Campos opcionais até o prompt da LLM fixar: `moeda`, `observacoes`, `confianca`
 
 1. Usuário envia mensagem de voz.
 2. Bot obtém arquivo (Telegram `getFile`) e envia URL ou bytes ao webhook.
-3. Webhook manda **áudio + instruções** ao Gemini Flash.
-4. Webhook valida JSON, mapeia para colunas, **append** na planilha.
+3. Webhook descarrega o áudio apenas de **`api.telegram.org`** e envia ao Gemini Flash.
+4. Webhook valida JSON (`lancamentoFinanceiroSchema`). **Append** na planilha: em desenvolvimento.
 5. Bot responde sucesso + resumo.
 
 ### Texto
@@ -114,6 +134,7 @@ Campos opcionais até o prompt da LLM fixar: `moeda`, `observacoes`, `confianca`
 - Tratar **cold starts** como normais: mensagem “processando…” no Telegram.
 - Logs estruturados mínimos (nível erro + id da mensagem).
 - Falhas Gemini/Sheets: mensagem ao usuário sem vazar stack trace.
+- Respostas **502/503** transitórias na chamada `generateContent` disparam até **3 tentativas** com backoff (~1 s, ~2 s) antes de devolver erro ao utilizador.
 - Monitorar cotas: Gemini, Sheets, e plataforma de hospedagem.
 
 ## Glossário

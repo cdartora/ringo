@@ -9,15 +9,25 @@ import {
   createVerifyBearerToken,
 } from "./middleware/require-bearer.js";
 import { LaunchRepository } from "./repositories/launch.repository.js";
+import { createGeminiModel } from "./services/gemini/gemini-client.js";
+import { extractLaunchFromIngest } from "./services/gemini/extract-launch-from-ingest.js";
 import { createIngestService } from "./services/ingest/ingest.service.js";
 
 export function createApp(config: WebhookConfig) {
   const app = express();
 
   const launchRepository = new LaunchRepository();
+  const geminiKey = config.geminiApiKey.trim();
+  const geminiModel = geminiKey
+    ? createGeminiModel(geminiKey, config.geminiModelId)
+    : undefined;
   const ingestService = createIngestService({
     allowedTelegramUserIds: config.allowedTelegramUserIds,
     launchRepository,
+    geminiApiKey: config.geminiApiKey,
+    extractLaunch: geminiModel
+      ? (req) => extractLaunchFromIngest(geminiModel, req)
+      : undefined,
   });
 
   const requireBearerSecretPresent = createRequireBearer(config);

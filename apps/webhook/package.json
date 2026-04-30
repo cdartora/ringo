@@ -9,6 +9,7 @@
     "start": "node --import tsx src/server.ts"
   },
   "dependencies": {
+    "@google/generative-ai": "^0.24.0",
     "@ringo/shared": "*",
     "dotenv": "^16.4.7",
     "express": "^4.21.2"

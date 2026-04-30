@@ -1,10 +1,21 @@
 import type { IngestRequest, IngestResponse } from "@ringo/shared";
 import type { LaunchRepository } from "../../repositories/launch.repository.js";
-import { notImplementedResponse } from "./ingest-responses.js";
+import type { ExtractLaunchFromIngestResult } from "../gemini/extract-launch-from-ingest.js";
+import {
+  geminiMisconfiguredResponse,
+} from "./ingest-responses.js";
+import {
+  buildLaunchConfirmationMessage,
+  fillMissingLaunchDate,
+} from "./normalize-launch.js";
 
 export type IngestServiceDeps = {
   allowedTelegramUserIds: Set<number> | null;
   launchRepository: LaunchRepository;
+  geminiApiKey: string;
+  extractLaunch?: (
+    req: IngestRequest,
+  ) => Promise<ExtractLaunchFromIngestResult>;
 };
 
 export type IngestService = {
@@ -13,7 +24,8 @@ export type IngestService = {
 };
 
 export function createIngestService(deps: IngestServiceDeps): IngestService {
-  const { allowedTelegramUserIds, launchRepository } = deps;
+  const { allowedTelegramUserIds, launchRepository, geminiApiKey, extractLaunch } =
+    deps;
 
   return {
     checkAllowlist(req: IngestRequest): IngestResponse | null {
@@ -31,7 +43,29 @@ export function createIngestService(deps: IngestServiceDeps): IngestService {
 
     async execute(validated: IngestRequest) {
       await launchRepository.persistFromIngest(validated);
-      return { status: 501, body: notImplementedResponse() };
+
+      if (!geminiApiKey.trim() || !extractLaunch) {
+        return { status: 503, body: geminiMisconfiguredResponse() };
+      }
+
+      const extracted = await extractLaunch(validated);
+      if (!extracted.ok) {
+        return { status: 200, body: extracted.response };
+      }
+
+      const lancamento = fillMissingLaunchDate(
+        extracted.lancamento,
+        validated.recebido_em,
+      );
+
+      return {
+        status: 200,
+        body: {
+          ok: true,
+          mensagem_usuario: buildLaunchConfirmationMessage(lancamento),
+          lancamento,
+        },
+      };
     },
   };
 }

@@ -25,9 +25,10 @@ export function createIngestPostHandler(deps: IngestRouteDeps) {
 
     const result = await ingestService.execute(parsed.data);
     console.error(
-      "[ringo-webhook] ingest accepted (stub)",
+      "[ringo-webhook] ingest processed",
       parsed.data.modo,
       parsed.data.client_message_id,
+      result.status,
     );
     res.status(result.status).json(result.body);
   };

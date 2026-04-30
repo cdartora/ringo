@@ -43,7 +43,7 @@
           "raw": "{\n  \"telegram_user_id\": 123456789,\n  \"client_message_id\": 42,\n  \"modo\": \"text\",\n  \"texto\": \"Gastei 45 reais no mercado ontem\",\n  \"recebido_em\": \"2026-04-30T12:00:00.000Z\"\n}"
         },
         "url": "{{baseUrl}}/ingest",
-        "description": "Requer WEBHOOK_SHARED_SECRET igual ao Bearer. Stub atual responde 501 not_implemented após validar o body."
+        "description": "Requer WEBHOOK_SHARED_SECRET no Bearer e GEMINI_API_KEY no servidor. Chama Gemini Flash; resposta 200 com lancamento ou erro amigável; sem chave, 503 misconfigured_gemini."
       }
     },
     {
@@ -62,10 +62,10 @@
         ],
         "body": {
           "mode": "raw",
-          "raw": "{\n  \"telegram_user_id\": 123456789,\n  \"client_message_id\": 43,\n  \"modo\": \"audio\",\n  \"audio_url\": \"https://example.com/audio.ogg\",\n  \"mime_type\": \"audio/ogg\",\n  \"recebido_em\": \"2026-04-30T12:00:00.000Z\"\n}"
+          "raw": "{\n  \"telegram_user_id\": 123456789,\n  \"client_message_id\": 43,\n  \"modo\": \"audio\",\n  \"audio_url\": \"https://api.telegram.org/file/bot<TOKEN>/<path>\",\n  \"mime_type\": \"audio/ogg\",\n  \"recebido_em\": \"2026-04-30T12:00:00.000Z\"\n}"
         },
         "url": "{{baseUrl}}/ingest",
-        "description": "Exemplo de payload para modo audio (URL baixável pelo webhook)."
+        "description": "audio_url deve usar HTTPS e hostname api.telegram.org (único permitido no webhook por segurança). Substituir TOKEN/path pelo link real do getFile."
       }
     }
   ]

@@ -20,7 +20,7 @@ flowchart LR
 ```
 
 - **Bot Telegram**: única responsabilidade exposta ao usuário — receber mensagens de **voz/áudio** e **texto**, encaminhar ao webhook (com autenticação), responder com confirmação e, opcionalmente, o **resumo do lançamento** retornado pela LLM.
-- **Webhook**: endpoint HTTP que pode **hibernar** após ~15 minutos sem tráfego (comportamento típico de free tier). Ao acordar, baixa o áudio se necessário, chama o Gemini para extrair JSON canônico de lançamento e **append** na planilha configurada.
+- **Webhook**: endpoint HTTP que pode **hibernar** após ~15 minutos sem tráfego (comportamento típico de free tier). Ao acordar, descarrega o áudio apenas de `api.telegram.org` quando necessário, chama o Gemini para extrair JSON canônico de lançamento e **append** na planilha quando integrado (ainda pendente).
 
 Detalhes de contrato e limites estão em [`docs/context/ringo-system.md`](docs/context/ringo-system.md) (contexto do sistema para documentação e RAG).
 
@@ -46,7 +46,8 @@ Valores e limites mudam; sempre confira os sites oficiais antes de fixar produç
 
 1. Copie [`env.example`](env.example) para `.env` na **raiz** do repositório (`cp env.example .env`).
 2. Preencha `WEBHOOK_SHARED_SECRET` (o bot deve enviar `Authorization: Bearer <mesmo valor>` em `POST /ingest`).
-3. Demais variáveis (`GEMINI_API_KEY`, `GOOGLE_SHEETS_SPREADSHEET_ID`, `GOOGLE_APPLICATION_CREDENTIALS`, etc.) entram em uso quando o pipeline for integrado.
+3. Preencha `GEMINI_API_KEY` para o webhook chamar o **Gemini Flash** em `POST /ingest` e devolver `lancamento` validado. Sem a chave, `/ingest` responde **503** com `erro.codigo` `misconfigured_gemini`. Opcional: **`GEMINI_MODEL`** (omissão `gemini-2.5-flash`; em erro de modelo testa `gemini-2.0-flash`).
+4. Variáveis `GOOGLE_SHEETS_SPREADSHEET_ID`, `GOOGLE_APPLICATION_CREDENTIALS`, etc. entram em uso quando o **append** à planilha estiver integrado (a Sheet ainda não é escrita nesta versão).
 
 Detalhes do contrato HTTP e do corpo JSON estão em [`docs/context/ringo-system.md`](docs/context/ringo-system.md).
 
@@ -67,7 +68,7 @@ ringo/
         services/
         repositories/
   packages/
-    shared/                 # @ringo/shared — tipos + ingestRequestSchema (Zod)
+    shared/                 # @ringo/shared — tipos + ingestRequestSchema + lancamentoFinanceiroSchema (Zod)
   docs/
     context/
       ringo-system.md
@@ -87,14 +88,15 @@ Requisitos: **Node.js 20+**.
 ```bash
 npm install
 cp env.example .env
-# Edite .env e defina WEBHOOK_SHARED_SECRET
+# Edite .env: WEBHOOK_SHARED_SECRET e GEMINI_API_KEY
 
 npm run dev:webhook
 ```
 
-- Stack: **Express** (`apps/webhook`), validação do corpo com **Zod** no pacote `@ringo/shared` (`ingestRequestSchema`).
+- O webhook carrega `.env` da **raiz do monorepo** (ao lado de `package.json` das workspaces), mesmo quando o comando corre em `apps/webhook`.
+- Stack: **Express** (`apps/webhook`), validação do corpo com **Zod** no `@ringo/shared` (`ingestRequestSchema`; resposta da LLM validada com `lancamentoFinanceiroSchema`).
 - Saúde: [http://localhost:3000/health](http://localhost:3000/health) (porta padrão `3000`; sobrescreva com `PORT` no `.env`).
-- Ingestão: `POST http://localhost:3000/ingest` com `Authorization: Bearer …` e corpo JSON que passe em `ingestRequestSchema`. Resposta **501** (`not_implemented`) até Gemini e Google Sheets serem ligados.
+- Ingestão: `POST …/ingest` autenticado. Com `GEMINI_API_KEY` definido, o webhook chama o Gemini Flash: **200** com `ok: true` e `lancamento` em caso de sucesso; **200** com `ok: false` para falhas tratadas (`invalid_audio_url`, `gemini_auth`, `gemini_model_not_found`, `gemini_rate_limit`, `gemini_unavailable`, `extraction_invalid`, etc.); **503** se `GEMINI_API_KEY` estiver ausente. Gravar na **Google Sheet** ainda não está implementado — a mensagem ao utilizador indica que a planilha está pendente.
 
 Verificação de tipos do app webhook:
 
