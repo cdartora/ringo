@@ -1,0 +1,21 @@
+{
+  "name": "@ringo/bot",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "tsx watch src/index.ts",
+    "typecheck": "tsc --noEmit -p .",
+    "start": "node --import tsx src/index.ts"
+  },
+  "dependencies": {
+    "@ringo/shared": "*",
+    "dotenv": "^16.4.7",
+    "grammy": "^1.39.4"
+  },
+  "devDependencies": {
+    "@types/node": "^22.14.1",
+    "tsx": "^4.19.3",
+    "typescript": "^5.8.3"
+  }
+}
