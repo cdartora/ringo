@@ -42,8 +42,6 @@ export function createIngestService(deps: IngestServiceDeps): IngestService {
     },
 
     async execute(validated: IngestRequest) {
-      await launchRepository.persistFromIngest(validated);
-
       if (!geminiApiKey.trim() || !extractLaunch) {
         return { status: 503, body: geminiMisconfiguredResponse() };
       }
@@ -58,11 +56,19 @@ export function createIngestService(deps: IngestServiceDeps): IngestService {
         validated.recebido_em,
       );
 
+      const persisted = await launchRepository.persistLaunch(lancamento);
+      if (!persisted.ok) {
+        return { status: 200, body: persisted.response };
+      }
+
       return {
         status: 200,
         body: {
           ok: true,
-          mensagem_usuario: buildLaunchConfirmationMessage(lancamento),
+          mensagem_usuario: buildLaunchConfirmationMessage(
+            lancamento,
+            persisted.wroteToSheet,
+          ),
           lancamento,
         },
       };

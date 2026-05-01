@@ -40,10 +40,14 @@ function formatValor(l: LancamentoFinanceiroParsed): string {
 
 export function buildLaunchConfirmationMessage(
   l: LancamentoFinanceiroParsed,
+  wroteToSheet: boolean,
 ): string {
   const valorFmt = formatValor(l);
   const tipoPt = l.tipo === "expense" ? "Despesa" : "Receita";
   const cat =
     l.categoria !== null && l.categoria !== "" ? ` · ${l.categoria}` : "";
-  return `${tipoPt}: ${valorFmt}${cat} · ${l.data ?? ""} — ${l.descricao}. Reconhecido (planilha ainda não ligada).`;
+  const tail = wroteToSheet
+    ? "Registado na planilha."
+    : "Reconhecido (planilha não configurada).";
+  return `${tipoPt}: ${valorFmt}${cat} · ${l.data ?? ""} — ${l.descricao}. ${tail}`;
 }

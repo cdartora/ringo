@@ -21,4 +21,19 @@ app.listen(config.port, () => {
   } else {
     console.error(`[ringo-webhook] GEMINI_MODEL=${config.geminiModelId}`);
   }
+  if (!config.googleSheets) {
+    console.error(
+      "[ringo-webhook] Google Sheets não configurado — defina GOOGLE_SHEETS_SPREADSHEET_ID e GOOGLE_APPLICATION_CREDENTIALS para gravar lançamentos.",
+    );
+  } else {
+    console.error(
+      "[ringo-webhook] Google Sheets ativo",
+      `firstDataRow=${config.googleSheets.firstDataRow}`,
+      config.googleSheets.tabTitle ?? "(primeira aba)",
+      "— partilha a folha com:",
+      config.googleSheets.serviceAccountEmail ??
+        "(abre o JSON e usa client_email)",
+    );
+  }
+
 });

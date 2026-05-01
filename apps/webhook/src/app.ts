@@ -11,12 +11,17 @@ import {
 import { LaunchRepository } from "./repositories/launch.repository.js";
 import { createGeminiModel } from "./services/gemini/gemini-client.js";
 import { extractLaunchFromIngest } from "./services/gemini/extract-launch-from-ingest.js";
+import { createSheetLaunchWriter } from "./services/google-sheets/sheet-launch-writer.js";
 import { createIngestService } from "./services/ingest/ingest.service.js";
 
 export function createApp(config: WebhookConfig) {
   const app = express();
 
-  const launchRepository = new LaunchRepository();
+  const sheetWriter = config.googleSheets
+    ? createSheetLaunchWriter(config.googleSheets)
+    : null;
+  const launchRepository = new LaunchRepository(sheetWriter);
+
   const geminiKey = config.geminiApiKey.trim();
   const geminiModel = geminiKey
     ? createGeminiModel(geminiKey, config.geminiModelId)

@@ -13,5 +13,6 @@ export function loadEnvFromMonorepoRoot(): void {
   const repoRoot = join(serverDir, "..", "..", "..");
   const envPath = join(repoRoot, ".env");
   if (!existsSync(envPath)) return;
-  loadDotenv({ path: envPath });
+  // Sobrescreve variáveis já definidas no shell; evita GOOGLE_APPLICATION_CREDENTIALS de outro projeto dominar.
+  loadDotenv({ path: envPath, override: true });
 }
