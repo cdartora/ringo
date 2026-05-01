@@ -12,7 +12,8 @@
     "@google/generative-ai": "^0.24.0",
     "@ringo/shared": "*",
     "dotenv": "^16.4.7",
-    "express": "^4.21.2"
+    "express": "^4.21.2",
+    "googleapis": "^171.4.0"
   },
   "devDependencies": {
     "@types/express": "^4.17.21",
