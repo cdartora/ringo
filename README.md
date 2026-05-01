@@ -20,7 +20,7 @@ flowchart LR
 ```
 
 - **Bot Telegram**: única responsabilidade exposta ao usuário — receber mensagens de **voz/áudio** e **texto**, encaminhar ao webhook (com autenticação), responder com confirmação e, opcionalmente, o **resumo do lançamento** retornado pela LLM.
-- **Webhook**: endpoint HTTP que pode **hibernar** após ~15 minutos sem tráfego (comportamento típico de free tier). Ao acordar, descarrega o áudio apenas de `api.telegram.org` quando necessário, chama o Gemini para extrair JSON canônico de lançamento e **append** na planilha quando integrado (ainda pendente).
+- **Webhook**: endpoint HTTP que pode **hibernar** após ~15 minutos sem tráfego (comportamento típico de free tier). Ao acordar, descarrega o áudio apenas de `api.telegram.org` quando necessário, chama o Gemini para extrair JSON canônico de lançamento e **grava na Google Planilhas** quando `GOOGLE_SHEETS_SPREADSHEET_ID` e `GOOGLE_APPLICATION_CREDENTIALS` estão definidos (procura a data na coluna A; entrada em B, saída em C, descrição em E; lançamentos extra no mesmo dia inserem uma linha nova abaixo do bloco da data e copiam a fórmula de saldo em D).
 
 Detalhes de contrato e limites estão em [`docs/context/ringo-system.md`](docs/context/ringo-system.md) (contexto do sistema para documentação e RAG).
 
@@ -45,9 +45,10 @@ Valores e limites mudam; sempre confira os sites oficiais antes de fixar produç
 ## Configuração
 
 1. Copie [`env.example`](env.example) para `.env` na **raiz** do repositório (`cp env.example .env`).
-2. Preencha `WEBHOOK_SHARED_SECRET` (o bot deve enviar `Authorization: Bearer <mesmo valor>` em `POST /ingest`).
-3. Preencha `GEMINI_API_KEY` para o webhook chamar o **Gemini Flash** em `POST /ingest` e devolver `lancamento` validado. Sem a chave, `/ingest` responde **503** com `erro.codigo` `misconfigured_gemini`. Opcional: **`GEMINI_MODEL`** (omissão `gemini-2.5-flash`; em erro de modelo testa `gemini-2.0-flash`).
-4. Variáveis `GOOGLE_SHEETS_SPREADSHEET_ID`, `GOOGLE_APPLICATION_CREDENTIALS`, etc. entram em uso quando o **append** à planilha estiver integrado (a Sheet ainda não é escrita nesta versão).
+2. Preencha `WEBHOOK_SHARED_SECRET` (o bot envia `Authorization: Bearer <mesmo valor>` em `POST /ingest`).
+3. Para o bot: `TELEGRAM_BOT_TOKEN`, `WEBHOOK_URL` (base do servidor, ex. `http://localhost:3000`) e, se quiser restringir acesso, `ALLOWED_TELEGRAM_USER_IDS` (mesma lista que o webhook usa).
+4. Preencha `GEMINI_API_KEY` para o webhook chamar o **Gemini Flash** em `POST /ingest` e devolver `lancamento` validado. Sem a chave, `/ingest` responde **503** com `erro.codigo` `misconfigured_gemini`. Opcional: **`GEMINI_MODEL`** (omissão `gemini-2.5-flash`; em erro de modelo testa `gemini-2.0-flash`).
+5. **Google Sheets**: `GOOGLE_SHEETS_SPREADSHEET_ID`, `GOOGLE_APPLICATION_CREDENTIALS` (caminho ao JSON da service account, relativo à raiz do repo ou absoluto). No Google Sheets, **Partilhar** → adiciona o endereço `client_email` desse JSON (ex.: `algo@projeto.iam.gserviceaccount.com`) com permissão **Editor**. Sem isto a API devolve 403. Opcional: `GOOGLE_SHEETS_TAB`, `GOOGLE_SHEETS_FIRST_DATA_ROW` (omissão `4`), `GOOGLE_SHEETS_MAX_ROWS`. Sem `SPREADSHEET_ID` / credenciais o webhook só interpreta o lançamento, sem gravar na folha.
 
 Detalhes do contrato HTTP e do corpo JSON estão em [`docs/context/ringo-system.md`](docs/context/ringo-system.md).
 
@@ -59,6 +60,9 @@ ringo/
   env.example               # variáveis documentadas → copiar para .env
   tsconfig.base.json
   apps/
+    bot/
+      src/
+        index.ts           # entrada: polling + encaminhar para /ingest
     webhook/
       src/
         app.ts             # Express: rotas e ordem dos middlewares
@@ -96,13 +100,21 @@ npm run dev:webhook
 - O webhook carrega `.env` da **raiz do monorepo** (ao lado de `package.json` das workspaces), mesmo quando o comando corre em `apps/webhook`.
 - Stack: **Express** (`apps/webhook`), validação do corpo com **Zod** no `@ringo/shared` (`ingestRequestSchema`; resposta da LLM validada com `lancamentoFinanceiroSchema`).
 - Saúde: [http://localhost:3000/health](http://localhost:3000/health) (porta padrão `3000`; sobrescreva com `PORT` no `.env`).
-- Ingestão: `POST …/ingest` autenticado. Com `GEMINI_API_KEY` definido, o webhook chama o Gemini Flash: **200** com `ok: true` e `lancamento` em caso de sucesso; **200** com `ok: false` para falhas tratadas (`invalid_audio_url`, `gemini_auth`, `gemini_model_not_found`, `gemini_rate_limit`, `gemini_unavailable`, `extraction_invalid`, etc.); **503** se `GEMINI_API_KEY` estiver ausente. Gravar na **Google Sheet** ainda não está implementado — a mensagem ao utilizador indica que a planilha está pendente.
+- Ingestão: `POST …/ingest` autenticado. Com `GEMINI_API_KEY` definido, o webhook chama o Gemini Flash: **200** com `ok: true` e `lancamento` em caso de sucesso; **200** com `ok: false` para falhas tratadas (Gemini, validação, ou planilha: `sheet_date_not_found`, `sheet_permission_denied`, etc.); **503** se `GEMINI_API_KEY` estiver ausente. Com Sheets configurado, o lançamento é também escrito na planilha; caso contrário a mensagem de sucesso indica que a planilha não está configurada.
 
 Verificação de tipos do app webhook:
 
 ```bash
 npm run typecheck -w @ringo/webhook
+npm run typecheck -w @ringo/bot
 ```
+
+## Bot Telegram (desenvolvimento local)
+
+1. No Telegram, fale com [@BotFather](https://t.me/BotFather), envie `/newbot`, defina nome e username; copie o **token** para `TELEGRAM_BOT_TOKEN` no `.env`.
+2. Suba o webhook (`npm run dev:webhook`) com `WEBHOOK_SHARED_SECRET` e `GEMINI_API_KEY` preenchidos.
+3. Em outro terminal: `npm run dev:bot`. O bot usa **long polling** (Telegram entrega updates direto ao processo; não precisa expor URL pública para o Telegram).
+4. Opcional: defina `ALLOWED_TELEGRAM_USER_IDS` com seu `user_id` (número). Um jeito rápido de ver o ID é mandar algo para [@userinfobot](https://t.me/userinfobot).
 
 ## Contribuir / desenvolver
 
