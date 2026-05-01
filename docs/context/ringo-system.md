@@ -16,6 +16,8 @@ Permitir que uma pessoa registre **lançamentos de finanças pessoais** falando 
 
 ### 1. Bot Telegram
 
+- **Implementação atual** (`apps/bot`): processo Node com **[grammY](https://grammy.dev)** em **long polling** no desenvolvimento local; faz `POST` autenticado para `/ingest` com texto ou URL de arquivo em `api.telegram.org`.
+
 - **Função**: inbox — recebe **áudio** e **texto** vinculados ao usuário.
 - **Não** precisa executar LLM nem escrever na planilha.
 - Deve **encaminhar** payload (texto, referência ou bytes de áudio, `user_id`, timestamps) ao **webhook** com autenticação.
@@ -25,7 +27,7 @@ Permitir que uma pessoa registre **lançamentos de finanças pessoais** falando 
 
 ### 2. Webhook (HTTP)
 
-- **Função**: orquestração — recebe evento do bot, chama **Gemini**, valida JSON com **`lancamentoFinanceiroSchema`**, e **no futuro** grava na **Sheet** (append ainda não implementado).
+- **Função**: orquestração — recebe evento do bot, chama **Gemini**, valida JSON com **`lancamentoFinanceiroSchema`**, e grava na **Google Sheet** quando `GOOGLE_SHEETS_SPREADSHEET_ID` e `GOOGLE_APPLICATION_CREDENTIALS` estão configurados.
 - **Hibernação**: em free tier, instâncias frequentemente **dormem** após ~**15 min** sem tráfego. O primeiro request após idle pode ser lento.
 - Deve ser **idempotente** quando possível (ex.: `client_message_id` para não duplicar linha).
 - Timeouts: alinhar limite da plataforma com tempo de Gemini + Sheets (retry com backoff onde aplicável).
@@ -44,7 +46,7 @@ Corpo JSON de `/ingest` definido e validado em runtime por **`ingestRequestSchem
 - Se `modo === "audio"`: `audio_url` (string) obrigatório — URL **HTTPS** cujo hostname seja **`api.telegram.org`** (link `getFile` do Telegram). Outros hosts são rejeitados (mitigação SSRF).
 - Opcional: `mime_type` (string).
 
-Resposta JSON: tipo `IngestResponse` (`ok`, `mensagem_usuario`, `lancamento?`, `erro?`). Com `GEMINI_API_KEY` definido, o webhook chama **Gemini Flash**, interpreta texto ou áudio e valida o resultado com **`lancamentoFinanceiroSchema`** (`@ringo/shared`). **Append na Google Sheet** ainda não está ligado; em sucesso o campo `lancamento` é devolvido e `mensagem_usuario` confirma o reconhecimento (referência de que a planilha está pendente).
+Resposta JSON: tipo `IngestResponse` (`ok`, `mensagem_usuario`, `lancamento?`, `erro?`). Com `GEMINI_API_KEY` definido, o webhook chama **Gemini Flash**, interpreta texto ou áudio e valida o resultado com **`lancamentoFinanceiroSchema`** (`@ringo/shared`). Com Sheets configurado, persiste o lançamento na planilha (ver secção **Google Planilhas**); caso contrário `mensagem_usuario` indica que a planilha não está configurada.
 
 ##### Normalização de `data`
 
@@ -64,8 +66,14 @@ Resposta JSON: tipo `IngestResponse` (`ok`, `mensagem_usuario`, `lancamento?`, `
 | `gemini_blocked` | Bloqueio por filtros da API |
 | `gemini_empty_response` | Resposta sem texto utilizável |
 | `extraction_invalid` | JSON inválido ou fora do schema de lançamento |
+| `sheet_date_not_found` | Data do lançamento não existe na coluna A (intervalo configurado) |
+| `sheet_tab_not_found` | Aba `GOOGLE_SHEETS_TAB` não encontrada |
+| `sheet_not_found` | ID da planilha inválido ou inacessível |
+| `sheet_permission_denied` | Service account sem permissão na folha |
+| `sheet_api_error` | Outro erro da API Sheets |
+| `sheet_invalid_launch` | Data em falta após normalização (não deveria ocorrer em fluxo normal) |
 
-Variáveis de ambiente: ver `env.example` (`GEMINI_API_KEY`, opcional `GEMINI_MODEL`).
+Variáveis de ambiente: ver `env.example` (`GEMINI_API_KEY`, opcional `GEMINI_MODEL`, Google Sheets).
 
 
 ### 3. Google Gemini (Flash)
@@ -77,9 +85,11 @@ Variáveis de ambiente: ver `env.example` (`GEMINI_API_KEY`, opcional `GEMINI_MO
 
 ### 4. Google Planilhas
 
-- Planilha **já existente**, com colunas alinhadas ao schema (ou camada de mapeamento estável).
-- Operação principal: **append** de uma linha por lançamento.
-- Autenticação: **service account** (recomendado para bot headless) com a planilha compartilhada com o email da SA.
+- Planilha **já existente** com **datas na coluna A** (ex.: todas as datas de 2026); **entrada** em **B**, **saída** em **C**, **saldo** em **D** (fórmula), **descrição** do lançamento em **E**.
+- **Primeiro** lançamento numa dada data: localiza a linha com essa data em A; se a célula **B** (receita) ou **C** (despesa) conforme o tipo estiver vazia, preenche **A** (data em texto `DD/MM/AAAA`), valor, **E** — **sem** apagar a fórmula em **D**.
+- **Lançamento extra** no mesmo dia (célula B ou C alvo já ocupada): **insere** uma linha imediatamente abaixo do **último** bloco com a mesma data em **A**, **copia** a célula **D** da linha acima para manter a lógica de saldo, preenche **A**, **B** ou **C**, **E**.
+- Mapeamento e limites ficam centralizados no webhook (`apps/webhook/src/services/google-sheets/`).
+- Autenticação: **service account** com a planilha partilhada (Editor) com o email da SA.
 
 ## Schema de lançamento (rascunho evolutivo)
 
@@ -114,7 +124,7 @@ Campos opcionais até o prompt da LLM fixar: `moeda`, `observacoes`, `confianca`
 1. Usuário envia mensagem de voz.
 2. Bot obtém arquivo (Telegram `getFile`) e envia URL ou bytes ao webhook.
 3. Webhook descarrega o áudio apenas de **`api.telegram.org`** e envia ao Gemini Flash.
-4. Webhook valida JSON (`lancamentoFinanceiroSchema`). **Append** na planilha: em desenvolvimento.
+4. Webhook valida JSON (`lancamentoFinanceiroSchema`) e grava na planilha quando configurado.
 5. Bot responde sucesso + resumo.
 
 ### Texto
