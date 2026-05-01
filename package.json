@@ -6,7 +6,8 @@
     "apps/*"
   ],
   "scripts": {
-    "dev:webhook": "npm run dev -w @ringo/webhook"
+    "dev:webhook": "npm run dev -w @ringo/webhook",
+    "dev:bot": "npm run dev -w @ringo/bot"
   },
   "engines": {
     "node": ">=20"
