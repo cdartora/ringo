@@ -28,7 +28,8 @@ Permitir que uma pessoa registre **lançamentos de finanças pessoais** falando 
 ### 2. Webhook (HTTP)
 
 - **Função**: orquestração — recebe evento do bot, chama **Gemini**, valida JSON com **`lancamentoFinanceiroSchema`**, e grava na **Google Sheet** quando `GOOGLE_SHEETS_SPREADSHEET_ID` e `GOOGLE_APPLICATION_CREDENTIALS` estão configurados.
-- **Hibernação**: em free tier, instâncias frequentemente **dormem** após ~**15 min** sem tráfego. O primeiro request após idle pode ser lento.
+- **Hibernação**: em free tier, instâncias frequentemente **dormem** após ~**15 min** sem tráfego HTTP **entrada** para o hostname do serviço. O primeiro request após idle pode ser lento.
+- **Deploy de referência (Render, monólito)**: webhook e bot Telegram correm **no mesmo** Web Service (`npm run start:production`), porque o polling do Telegram **não** conta como entrada HTTP e, sozinho, **não** impede spin-down do dyno. O ficheiro [`render.yaml`](../../render.yaml) na raiz do repo define build (`npm ci --include=dev`; necessário porque o arranque usa `tsx`) e arranque via [`scripts/render-start.sh`](../../scripts/render-start.sh): se existir secreto **`GOOGLE_SERVICE_ACCOUNT_JSON`**, materializa **`/tmp/google-sa.json`** e exporta **`GOOGLE_APPLICATION_CREDENTIALS`** antes de iniciar os processos. Credenciais locais continuam **`service-account.json`** ignorado pelo Git (**nunca** commitar). Em plano gratuito, um **cron externo** (ex.: UptimeRobot, cron-job.org) pode chamar **`GET /health`** a cada ~**10–14 min** para reduzir spin-down (endpoint público; uso aceitável para projeto pessoal).
 - Deve ser **idempotente** quando possível (ex.: `client_message_id` para não duplicar linha).
 - Timeouts: alinhar limite da plataforma com tempo de Gemini + Sheets (retry com backoff onde aplicável).
 
@@ -89,7 +90,7 @@ Variáveis de ambiente: ver `env.example` (`GEMINI_API_KEY`, opcional `GEMINI_MO
 - **Primeiro** lançamento numa dada data: localiza a linha com essa data em A; se a célula **B** (receita) ou **C** (despesa) conforme o tipo estiver vazia, preenche **A** (data em texto `DD/MM/AAAA`), valor, **E** — **sem** apagar a fórmula em **D**.
 - **Lançamento extra** no mesmo dia (célula B ou C alvo já ocupada): **insere** uma linha imediatamente abaixo do **último** bloco com a mesma data em **A**, **copia** a célula **D** da linha acima para manter a lógica de saldo, preenche **A**, **B** ou **C**, **E**.
 - Mapeamento e limites ficam centralizados no webhook (`apps/webhook/src/services/google-sheets/`).
-- Autenticação: **service account** com a planilha partilhada (Editor) com o email da SA.
+- Autenticação: **service account** com a planilha partilhada (Editor) com o email da SA — localmente por ficheiro JSON + `GOOGLE_APPLICATION_CREDENTIALS`; em **Render** (produção) por secreto `GOOGLE_SERVICE_ACCOUNT_JSON` conforme README e [`scripts/render-start.sh`](../../scripts/render-start.sh).
 
 ## Schema de lançamento (rascunho evolutivo)
 
@@ -140,6 +141,8 @@ Campos opcionais até o prompt da LLM fixar: `moeda`, `observacoes`, `confianca`
 - Limite simples de taxa por usuário (evita estouro de cota API).
 
 ## Free tier e estabilidade
+
+- **Render free tier (opcional):** mesmo dyno com bot + webhook (**`start:production`**); spin-down esperado (**~15 min** sem entrada HTTP ao hostname). Pedidos externos a **`GET /health`** periodicamente amortizam (ver webhook acima).
 
 - Tratar **cold starts** como normais: mensagem “processando…” no Telegram.
 - Logs estruturados mínimos (nível erro + id da mensagem).

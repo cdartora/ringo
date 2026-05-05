@@ -1,0 +1,37 @@
+# Render Blueprint: https://render.com/docs/infrastructure-as-code
+# Após o primeiro deploy: definir cron externo (ex. cron-job.org) GET /health a cada ~10–14 min
+# se usares plano gratuito e monólito webhook+bot (ver README).
+
+services:
+  - type: web
+    name: ringo
+    runtime: node
+    region: frankfurt # ajustável no dashboard
+    plan: free
+    branch: main
+    buildCommand: npm ci --include=dev # tsx só em devDependencies; start usa node --import tsx
+    startCommand: bash scripts/render-start.sh
+    healthCheckPath: /health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: WEBHOOK_SHARED_SECRET
+        sync: false
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: TELEGRAM_BOT_TOKEN
+        sync: false
+      # Base pública HTTPS do serviço (ex.: https://ringo.onrender.com — sem barra final)
+      - key: WEBHOOK_URL
+        sync: false
+      - key: ALLOWED_TELEGRAM_USER_IDS
+        sync: false
+      # JSON inteiro da Google service account (multiline OK no dashboard). Omitir se não usares Sheets.
+      - key: GOOGLE_SERVICE_ACCOUNT_JSON
+        sync: false
+      - key: GOOGLE_SHEETS_SPREADSHEET_ID
+        sync: false
+      - key: GEMINI_MODEL
+        sync: false
+      - key: GOOGLE_SHEETS_TAB
+        sync: false

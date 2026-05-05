@@ -52,11 +52,28 @@ Valores e limites mudam; sempre confira os sites oficiais antes de fixar produç
 
 Detalhes do contrato HTTP e do corpo JSON estão em [`docs/context/ringo-system.md`](docs/context/ringo-system.md).
 
+## Deploy (Render, monólito)
+
+Stack de referência: **um único Web Service** com [`render.yaml`](render.yaml) na raiz (Blueprint/IaC) — build **`npm ci --include=dev`** (o `start` dos apps usa `node --import tsx`; `tsx` vive só em devDependencies dos workspaces), arranque `bash scripts/render-start.sh` (pré-materializa **`/tmp/google-sa.json`** a partir da variável secreta **`GOOGLE_SERVICE_ACCOUNT_JSON`** quando definida), depois `npm run start:production` (**webhook + bot** via [`concurrently`](https://www.npmjs.com/package/concurrently)).
+
+1. Cria conta [Render](https://render.com), liga este repositório e importa o Blueprint (`render.yaml`) ou replica manualmente nome, ramo (**main**), `buildCommand` (`npm ci --include=dev`), `startCommand`, `healthCheckPath` (**`/health`**) e plano **Free** onde aplicável.
+2. Define no dashboard as variáveis que o blueprint marca como secreto (**sync** desde o primeiro deploy): `WEBHOOK_SHARED_SECRET`, `GEMINI_API_KEY`, `TELEGRAM_BOT_TOKEN`, `WEBHOOK_URL` (**HTTPS público do serviço**, sem `/` final, ex.: `https://ringo.onrender.com`), allowlist opcional (`ALLOWED_TELEGRAM_USER_IDS`), Sheets opcionais (`GOOGLE_SHEETS_SPREADSHEET_ID`, **`GOOGLE_SERVICE_ACCOUNT_JSON`** como JSON inteiro multi-linha — **não** usar ficheiros em repo), `GEMINI_MODEL` / `GOOGLE_SHEETS_TAB` se precisares. O Render injeta **`PORT`** na app; webhook e bot partilham o mesmo host e apenas o webhook escuta nessa porta HTTP.
+3. Após primeiro deploy bem-sucedido, testa **`GET /health`** e um fluxo real no Telegram. No plano gratuito, **cron externo** (ex.: [cron-job.org](https://cron-job.org)) com **`GET https://…onrender.com/health`** cada **10–14 min** reduz spin-down (**entrada HTTP** conta para o mesmo dyno onde o bot corre).
+
+**Credenciais Google:** desenvolvimento local = ficheiro `service-account.json` na raiz (já no [`.gitignore`](.gitignore)) + `GOOGLE_APPLICATION_CREDENTIALS=service-account.json`. Produção Render = apenas **`GOOGLE_SERVICE_ACCOUNT_JSON`** no dashboard (**nunca** commits com chaves).
+
+**CI:** em push/`pull_request` para `main`, [`.github/workflows/ci.yml`](.github/workflows/ci.yml) corre `npm ci` e `typecheck` dos workspaces webhook e bot (sem Sheets nem secrets).
+
+**Arranque local equivalente ao Render** (duas apps + SA em ficheiro): dois terminais `npm run dev:webhook` e `npm run dev:bot`, ou `npm run start:production` se quiserem imagem igual à produção (sem hot reload).
+
 ## Estrutura do repositório
 
 ```
 ringo/
-  package.json              # npm workspaces
+  package.json              # npm workspaces; `start:production` webhook+bot (prod / Render)
+  render.yaml               # Blueprint Render (Web Service, env secretos no dashboard)
+  scripts/
+    render-start.sh         # Produção: GOOGLE_SERVICE_ACCOUNT_JSON → /tmp + start:production
   env.example               # variáveis documentadas → copiar para .env
   tsconfig.base.json
   apps/
@@ -78,6 +95,9 @@ ringo/
       ringo-system.md
   postman/
     Ringo-Webhook.postman_collection.json
+  .github/
+    workflows/
+      ci.yml                # npm ci + typecheck webhook e bot em main / PR
   .cursor/rules/
 ```
 

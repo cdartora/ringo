@@ -7,7 +7,11 @@
   ],
   "scripts": {
     "dev:webhook": "npm run dev -w @ringo/webhook",
-    "dev:bot": "npm run dev -w @ringo/bot"
+    "dev:bot": "npm run dev -w @ringo/bot",
+    "start:production": "concurrently -n webhook,bot \"npm run start -w @ringo/webhook\" \"npm run start -w @ringo/bot\""
+  },
+  "devDependencies": {
+    "concurrently": "^9.2.1"
   },
   "engines": {
     "node": ">=20"
